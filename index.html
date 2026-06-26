@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CloudCore — System Pulse</title>
+<style>
+  :root {
+    --accent: #1D9E75;
+    --accent-light: #E1F5EE;
+    --bg-page: #F1EFE8;
+    --bg-card: #FFFFFF;
+    --bg-soft: #F4F8F9;
+    --border: #DCD9CE;
+    --text-primary: #1A1A18;
+    --text-secondary: #6B6A64;
+    --text-tertiary: #97958C;
+    --warning-bg: #FAEEDA;
+    --warning-text: #854F0B;
+    --danger-text: #A32D2D;
+    --success-text: #0F6E56;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 24px 20px 80px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 8px; }
+  .muted { color: var(--text-secondary); font-size: 13px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; font-size: 12px; }
+  .seg button { border: none; background: transparent; padding: 6px 12px; cursor: pointer; color: var(--text-secondary); font-size: 12px; font-family: inherit; }
+  .seg button.active { background: var(--bg-soft); color: var(--text-primary); font-weight: 600; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; }
+  .section-label { font-size: 12px; color: var(--text-tertiary); margin: 0 0 10px; display: flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .badge-live { font-size: 11px; background: var(--accent-light); color: var(--success-text); padding: 2px 8px; border-radius: var(--radius-md); margin-left: 8px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+  .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; }
+  .grid-2-eq { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+  .metric-card { background: var(--bg-card); border-radius: var(--radius-md); padding: 14px 16px; border: 1px solid var(--border); }
+  .metric-label { font-size: 12px; color: var(--text-secondary); margin: 0 0 4px; }
+  .metric-value { font-size: 24px; font-weight: 600; margin: 0; }
+  table { width: 100%; font-size: 12px; border-collapse: collapse; }
+  th { text-align: left; color: var(--text-secondary); font-weight: 500; padding: 4px 0; }
+  td { padding: 6px 0; }
+  tr.total td { border-top: 1px solid var(--border); font-weight: 700; font-size: 13px; padding-top: 9px; }
+  .seg-card { background: var(--bg-soft); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px; cursor: pointer; transition: border-color .15s; }
+  .seg-card.active { border-color: var(--text-primary); }
+  .seg-num { font-size: 21px; font-weight: 600; margin: 0 0 2px; }
+  .pill-quiet { font-size: 11px; color: var(--text-tertiary); background: var(--bg-soft); padding: 3px 9px; border-radius: var(--radius-md); }
+  .alert { display: flex; align-items: center; gap: 8px; background: var(--warning-bg); border-radius: var(--radius-md); padding: 8px 10px; font-size: 12px; color: var(--warning-text); margin-bottom: 8px; }
+  .stack { display: flex; flex-direction: column; gap: 20px; }
+  h2.dash-title { font-size: 16px; font-weight: 600; margin: 0; }
+  .tooltip-box { position: absolute; pointer-events: none; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.08); opacity: 0; z-index: 10; }
+  @media (max-width: 760px) {
+    .grid-4 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .grid-2, .grid-2-eq, .grid-3 { grid-template-columns: 1fr; }
+    .fleet-layout, .channel-layout { grid-template-columns: 1fr !important; }
+  }
+  .fleet-layout, .channel-layout { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: center; }
+  input[type="date"] { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); font-family: inherit; font-size: 13px; }
+  button.btn { padding: 8px 16px; background: var(--bg-soft); border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 13px; cursor: pointer; font-family: inherit; }
+  button.preset { padding: 4px 10px; font-size: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; font-family: inherit; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div><span class="live-dot"></span><span class="muted">Обновлено только что · Almaty</span></div>
+    <div class="muted">CloudCore · System Pulse · прототип</div>
+  </div>
+
+  <div class="stack">
+
+    <div>
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+        <div style="display:flex; align-items:center;">
+          <h2 class="dash-title">System pulse</h2>
+          <span class="badge-live">Live</span>
+        </div>
+        <div class="seg" id="liveResSwitch">
+          <button data-res="sec" class="live-res-btn active">Сек</button>
+          <button data-res="min" class="live-res-btn">Мин</button>
+        </div>
+      </div>
+
+      <div class="grid-4" style="margin-bottom:12px;">
+        <div class="metric-card">
+          <p class="metric-label" id="tpsLabel">Транзакции/сек</p>
+          <p class="metric-value" id="tpsVal">14</p>
+        </div>
+        <div class="metric-card">
+          <p class="metric-label">Оборот / сутки (live)</p>
+          <p class="metric-value">28.4М ₸</p>
+        </div>
+        <div class="metric-card">
+          <p class="metric-label">Ошибки платежей/мин</p>
+          <p class="metric-value" style="color:var(--warning-text);">3</p>
+        </div>
+        <div class="metric-card">
+          <p class="metric-label">Потеря связи/мин</p>
+          <p class="metric-value">1</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="position:relative; height:180px;">
+          <canvas id="pulseChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <p class="section-label">Снэпшот на сегодня</p>
+      <div class="grid-2" style="margin-bottom:12px;">
+        <div class="card">
+          <p style="font-size:14px; font-weight:600; margin:0 0 10px;">Флот устройств</p>
+          <div class="grid-2-eq" style="gap:8px;">
+            <div style="background:var(--bg-soft); border-radius:var(--radius-md); padding:10px 12px;">
+              <p style="font-size:11px; color:var(--text-secondary); margin:0 0 3px;">Всего устройств</p>
+              <p style="font-size:19px; font-weight:600; margin:0;">9 842</p>
+            </div>
+            <div style="background:var(--bg-soft); border-radius:var(--radius-md); padding:10px 12px;">
+              <p style="font-size:11px; color:var(--text-secondary); margin:0 0 3px;">Онлайн</p>
+              <p style="font-size:19px; font-weight:600; margin:0; color:var(--success-text);">9 410 · 95.6%</p>
+            </div>
+            <div style="background:var(--bg-soft); border-radius:var(--radius-md); padding:10px 12px;">
+              <p style="font-size:11px; color:var(--text-secondary); margin:0 0 3px;">Оффлайн</p>
+              <p style="font-size:19px; font-weight:600; margin:0; color:var(--warning-text);">432 · 4.4%</p>
+            </div>
+            <div style="background:var(--bg-soft); border-radius:var(--radius-md); padding:10px 12px;">
+              <p style="font-size:11px; color:var(--text-secondary); margin:0 0 3px;">Offline &gt;24ч</p>
+              <p style="font-size:19px; font-weight:600; margin:0;">58</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <p style="font-size:14px; font-weight:600; margin:0 0 10px;">Мерчанты</p>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; justify-content:space-between;"><span class="muted">Всего</span><span style="font-weight:600;">2 137</span></div>
+            <div style="display:flex; justify-content:space-between;"><span class="muted">Активные 24ч</span><span style="font-weight:600; color:var(--success-text);">1 894</span></div>
+            <div style="display:flex; justify-content:space-between;"><span class="muted">Неактивные 7д</span><span style="font-weight:600; color:var(--warning-text);">61</span></div>
+            <div style="display:flex; justify-content:space-between;"><span class="muted">Новые MTD</span><span style="font-weight:600;">47</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <p style="font-size:14px; font-weight:600; margin:0;" id="cityChartTitle">Устройства по городам</p>
+          <div class="seg" id="cityMetricSwitch">
+            <button data-metric="devices" class="city-metric-btn active">Устройства</button>
+            <button data-metric="revenue" class="city-metric-btn">Оборот</button>
+          </div>
+        </div>
+        <div style="position:relative; height:220px;">
+          <canvas id="cityChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <p style="font-size:14px; font-weight:600; margin:0;">Карта устройств</p>
+          <div style="display:flex; gap:10px; font-size:11px; color:var(--text-secondary);">
+            <span><span style="width:7px;height:7px;border-radius:50%;background:#2a78d6;display:inline-block;margin-right:4px;"></span>Онлайн</span>
+            <span><span style="width:7px;height:7px;border-radius:50%;background:#e34948;display:inline-block;margin-right:4px;"></span>Есть offline</span>
+          </div>
+        </div>
+        <div id="mapWrap" style="position:relative; width:100%; background:var(--bg-soft); border-radius:var(--radius-md); padding:10px;">
+          <div id="map" style="width:100%;"></div>
+        </div>
+        <p style="font-size:11px; color:var(--text-tertiary); margin:8px 0 0;">Координаты приблизительные, для макета. В продакшене — Google Maps JS API с реальными координатами установки.</p>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+        <p class="section-label" style="margin:0;">Аналитика за период</p>
+        <div class="seg" id="periodSwitch">
+          <button data-res="today" class="period-btn active">Сегодня</button>
+          <button data-res="month" class="period-btn">Месяц</button>
+          <button data-res="year" class="period-btn">Год</button>
+          <button data-res="custom" class="period-btn">Период</button>
+        </div>
+      </div>
+
+      <div id="customPanel" class="card" style="display:none; margin-bottom:10px;">
+        <div style="display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;">
+          <div>
+            <label style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px;">Дата начала</label>
+            <input type="date" id="dateFrom" value="2026-05-01">
+          </div>
+          <div>
+            <label style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:4px;">Дата окончания</label>
+            <input type="date" id="dateTo" value="2026-06-24">
+          </div>
+          <button class="btn" id="applyRange">Применить</button>
+          <span id="rangeError" style="font-size:12px; color:var(--danger-text); display:none;">Дата начала позже даты окончания</span>
+        </div>
+        <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;">
+          <button class="preset" data-days="7">7 дней</button>
+          <button class="preset" data-days="30">30 дней</button>
+          <button class="preset" data-days="90">Квартал</button>
+          <button class="preset" data-days="365">Год</button>
+        </div>
+      </div>
+
+      <div style="background:var(--bg-soft); border-radius:var(--radius-md); padding:7px 12px; margin-bottom:12px; font-size:12px; color:var(--text-secondary);" id="activePeriodLabel">
+        Текущий операционный день, с 00:00
+      </div>
+
+      <div class="stack" style="gap:12px;">
+        <div class="card">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+            <p style="font-size:14px; font-weight:600; margin:0;">Типы устройств</p>
+            <div class="seg" id="pieSwitch">
+              <button data-pie="count" class="pie-btn active">Кол-во</button>
+              <button data-pie="revenue" class="pie-btn">Оборот</button>
+            </div>
+          </div>
+          <div class="fleet-layout">
+            <div style="position:relative; height:190px;"><canvas id="fleetPie"></canvas></div>
+            <table>
+              <thead id="fleetHead">
+                <tr><th>Тип устройства</th><th style="text-align:right;">Кол-во</th><th style="text-align:right;">%</th></tr>
+              </thead>
+              <tbody id="fleetRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <p style="font-size:14px; font-weight:600; margin:0 0 12px;">Платёжные каналы</p>
+          <div class="channel-layout">
+            <div style="position:relative; height:190px;"><canvas id="channelDonut"></canvas></div>
+            <table>
+              <thead><tr><th>Канал</th><th style="text-align:right;">Транзакции</th><th style="text-align:right;">Сумма</th><th style="text-align:right;">%</th></tr></thead>
+              <tbody id="channelRows"></tbody>
+              <tfoot>
+                <tr class="total"><td>Итого</td><td id="totalTx" style="text-align:right;"></td><td id="totalRev" style="text-align:right;"></td><td style="text-align:right;">100%</td></tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2-eq">
+      <div class="card">
+        <p style="font-size:14px; font-weight:600; margin:0 0 10px;">Временные паттерны</p>
+        <div style="display:flex; flex-direction:column; gap:7px; font-size:12px;">
+          <div style="display:flex; justify-content:space-between;"><span class="muted">Пиковый час</span><span>18:00–19:00</span></div>
+          <div style="display:flex; justify-content:space-between;"><span class="muted">Лучший день</span><span>Суббота</span></div>
+          <div style="display:flex; justify-content:space-between;"><span class="muted">Просадка</span><span>04:00–06:00</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <p style="font-size:14px; font-weight:600; margin:0 0 10px;">Техническое здоровье</p>
+        <div style="display:flex; flex-direction:column; gap:7px; font-size:12px;">
+          <div style="display:flex; justify-content:space-between;"><span class="muted">Средний uptime</span><span>98.7%</span></div>
+          <div style="display:flex; justify-content:space-between;"><span class="muted">Средний RTT</span><span>210 мс</span></div>
+          <div style="display:flex; justify-content:space-between;"><span class="muted">SIM без трафика</span><span>27</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <p class="section-label" style="margin:0;">Здоровье мерчантов</p>
+        <span class="pill-quiet">Сигнал для удержания, не для ремонта</span>
+      </div>
+      <div class="card">
+        <div class="grid-3" id="segCards" style="margin-bottom:14px;">
+          <div class="seg-card active" data-seg="24h">
+            <p style="font-size:11px; color:var(--text-secondary); margin:0 0 5px;">Offline 24ч – 7 дней</p>
+            <p class="seg-num">58</p>
+            <p style="font-size:10px; color:var(--text-tertiary); margin:0;">устройств · 31 мерчант</p>
+          </div>
+          <div class="seg-card" data-seg="7d">
+            <p style="font-size:11px; color:var(--text-secondary); margin:0 0 5px;">Offline 7 – 30 дней</p>
+            <p class="seg-num" style="color:var(--warning-text);">22</p>
+            <p style="font-size:10px; color:var(--text-tertiary); margin:0;">устройств · 14 мерчантов</p>
+          </div>
+          <div class="seg-card" data-seg="30d">
+            <p style="font-size:11px; color:var(--text-secondary); margin:0 0 5px;">Offline &gt; 30 дней</p>
+            <p class="seg-num" style="color:var(--danger-text);">9</p>
+            <p style="font-size:10px; color:var(--text-tertiary); margin:0;">устройств · 6 мерчантов</p>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <p style="font-size:13px; font-weight:600; margin:0;" id="listTitle">Мерчанты к контакту — offline 24ч–7 дней</p>
+          <span style="font-size:11px; color:var(--text-tertiary);">Сортировка: риск ↓</span>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Мерчант</th><th style="text-align:right;">Устройств</th><th style="text-align:right;">Offline</th><th style="text-align:right;">% офлайн</th><th style="text-align:right;">Без транзакций</th><th style="text-align:right;">Риск</th></tr>
+          </thead>
+          <tbody id="merchantRows"></tbody>
+        </table>
+        <p style="font-size:11px; color:var(--text-tertiary); margin:10px 0 0;">Статус контакта ведётся в CRM — здесь только сигнал и приоритизация.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <p style="font-size:14px; font-weight:600; margin:0 0 10px;">Executive-алерты</p>
+      <div class="alert">Рост ошибок платежей: +4 за 5 минут</div>
+      <div class="alert">Концентрационный риск: один мерчант формирует 6.2% оборота</div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script>
+(function(){
+  var seriesSec = Array.from({length:60}, function(_,i){ return Math.round(10 + 8*Math.sin(i/6) + Math.random()*6); });
+  var labelsSec = Array.from({length:60}, function(_,i){ return i - 59; });
+  var liveTimer = null;
+
+  var pulseChart = new Chart(document.getElementById('pulseChart'), {
+    type: 'line',
+    data: { labels: labelsSec, datasets: [{ data: seriesSec, borderColor: '#1D9E75', backgroundColor: 'rgba(29,158,117,0.08)', fill: true, tension: 0.35, pointRadius: 0, borderWidth: 2 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 6, color: '#97958C', font: {size: 10} }, grid: { display: false } },
+        y: { ticks: { color: '#97958C', font: {size: 10} }, grid: { color: 'rgba(0,0,0,0.05)' } }
+      }
+    }
+  });
+  function tickSec(){
+    seriesSec.shift();
+    var next = Math.round(10 + 8*Math.sin(Date.now()/4000) + Math.random()*6);
+    seriesSec.push(next);
+    pulseChart.data.datasets[0].data = seriesSec;
+    pulseChart.update('none');
+    document.getElementById('tpsVal').textContent = next;
+  }
+  function tickMin(){
+    seriesSec.shift();
+    var next = Math.round(620 + 200*Math.sin(Date.now()/9000) + Math.random()*120);
+    seriesSec.push(next);
+    pulseChart.data.datasets[0].data = seriesSec;
+    pulseChart.update('none');
+    document.getElementById('tpsVal').textContent = next;
+  }
+  function startLive(res){
+    if (liveTimer) clearInterval(liveTimer);
+    document.getElementById('tpsLabel').textContent = res === 'sec' ? 'Транзакции/сек' : 'Транзакции/мин';
+    liveTimer = setInterval(res === 'sec' ? tickSec : tickMin, 1000);
+  }
+  startLive('sec');
+  document.querySelectorAll('.live-res-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.live-res-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      startLive(btn.dataset.res);
+    });
+  });
+
+  var cities = ['Алматы','Астана','Шымкент','Караганда','Актобе','Тараз','Усть-Каменогорск','Остальные'];
+  var devicesPct = [34, 21, 14, 9, 6, 5, 4, 7];
+  var revenueTenge = [10792000, 5396000, 3124000, 2271000, 1420000, 1420000, 1136000, 2841000];
+  var cityChart = new Chart(document.getElementById('cityChart'), {
+    type: 'bar',
+    data: { labels: cities, datasets: [{ data: devicesPct, backgroundColor: '#378ADD', borderRadius: 4 }] },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#97958C', font: {size: 10}, callback: function(v){ return v + '%'; } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        y: { ticks: { color: '#97958C', font: {size: 11} }, grid: { display: false } }
+      }
+    }
+  });
+  function applyCityMetric(metric){
+    if (metric === 'devices') {
+      cityChart.data.datasets[0].data = devicesPct;
+      cityChart.options.scales.x.ticks.callback = function(v){ return v + '%'; };
+      document.getElementById('cityChartTitle').textContent = 'Устройства по городам';
+    } else {
+      cityChart.data.datasets[0].data = revenueTenge;
+      cityChart.options.scales.x.ticks.callback = function(v){ return (v/1000000).toFixed(0) + 'М ₸'; };
+      document.getElementById('cityChartTitle').textContent = 'Оборот по городам';
+    }
+    cityChart.update();
+  }
+  document.querySelectorAll('.city-metric-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.city-metric-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      applyCityMetric(btn.dataset.metric);
+    });
+  });
+
+  var pieColors = ['#1D9E75','#378ADD','#BA7517','#D85A30','#7F77DD','#D4537E','#888780'];
+  var pieDataCount = [32,21,16,14,9,5,3];
+  var pieN = ['3 149','2 067','1 574','1 378','886','492','296'];
+  var pieRevSum = ['10.8М ₸','5.9М ₸','5.4М ₸','4.0М ₸','2.3М ₸','1.1М ₸','0.6М ₸'];
+  var pieLabels = ['Автомойки','Вендинг','Кофе-машины','Водоматы','Пылесосы','Игровые','Прочее'];
+  var pieDataRevPercent = [38,17,19,11,7,5,3];
+  var fleetPie = new Chart(document.getElementById('fleetPie'), {
+    type: 'doughnut',
+    data: { labels: pieLabels, datasets: [{ data: pieDataCount, backgroundColor: pieColors, borderWidth: 2, borderColor: '#ffffff' }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '60%' }
+  });
+  function renderFleetHead(mode){
+    document.getElementById('fleetHead').innerHTML = mode === 'count'
+      ? '<tr><th>Тип устройства</th><th style="text-align:right;">Кол-во</th><th style="text-align:right;">%</th></tr>'
+      : '<tr><th>Тип устройства</th><th style="text-align:right;">Оборот</th></tr>';
+  }
+  function renderFleetRows(mode){
+    var rows = document.getElementById('fleetRows');
+    rows.innerHTML = '';
+    pieLabels.forEach(function(label, i){
+      var tr = document.createElement('tr');
+      if (mode === 'count') {
+        tr.innerHTML = '<td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+pieColors[i]+';margin-right:6px;"></span>'+label+'</td><td style="text-align:right;">'+pieN[i]+'</td><td style="text-align:right; font-weight:600;">'+pieDataCount[i]+'%</td>';
+      } else {
+        tr.innerHTML = '<td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+pieColors[i]+';margin-right:6px;"></span>'+label+'</td><td style="text-align:right; font-weight:600;">'+pieRevSum[i]+'</td>';
+      }
+      rows.appendChild(tr);
+    });
+  }
+  function applyFleetMode(mode){
+    fleetPie.data.datasets[0].data = mode === 'count' ? pieDataCount : pieDataRevPercent;
+    fleetPie.update();
+    renderFleetHead(mode);
+    renderFleetRows(mode);
+  }
+  applyFleetMode('count');
+  document.querySelectorAll('.pie-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.pie-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      applyFleetMode(btn.dataset.pie === 'count' ? 'count' : 'revenue');
+    });
+  });
+
+  var channels = [
+    { name: 'Kaspi QR', tx: 48, txN: 186240, rev: 10.8, color: '#1D9E75' },
+    { name: 'Halyk QR', tx: 22, txN: 85470, rev: 5.9, color: '#378ADD' },
+    { name: 'Купюры', tx: 14, txN: 54390, rev: 5.4, color: '#BA7517' },
+    { name: 'Яндекс', tx: 9, txN: 34970, rev: 4.0, color: '#7F77DD' },
+    { name: 'Монеты', tx: 7, txN: 27200, rev: 2.3, color: '#888780' }
+  ];
+  new Chart(document.getElementById('channelDonut'), {
+    type: 'doughnut',
+    data: { labels: channels.map(function(c){return c.name;}), datasets: [{ data: channels.map(function(c){return c.tx;}), backgroundColor: channels.map(function(c){return c.color;}), borderWidth: 2, borderColor: '#ffffff' }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '62%' }
+  });
+  var chRows = document.getElementById('channelRows');
+  var totalTxN = 0, totalRev = 0;
+  channels.forEach(function(c){
+    totalTxN += c.txN; totalRev += c.rev;
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+c.color+';margin-right:6px;"></span>'+c.name+'</td><td style="text-align:right;">'+c.txN.toLocaleString('ru-RU')+'</td><td style="text-align:right;">'+c.rev.toFixed(1)+'М ₸</td><td style="text-align:right; font-weight:600;">'+c.tx+'%</td>';
+    chRows.appendChild(tr);
+  });
+  document.getElementById('totalTx').textContent = totalTxN.toLocaleString('ru-RU');
+  document.getElementById('totalRev').textContent = totalRev.toFixed(1) + 'М ₸';
+
+  var periodLabels = {
+    today: 'Текущий операционный день, с 00:00',
+    month: 'Текущий месяц, по дням месяца',
+    year: 'Текущий год, по месяцам',
+    custom: 'Произвольный период'
+  };
+  function formatDate(d){ return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
+  document.querySelectorAll('.period-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.period-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      var res = btn.dataset.res;
+      var panel = document.getElementById('customPanel');
+      if (res === 'custom') {
+        panel.style.display = 'block';
+        var from = new Date(document.getElementById('dateFrom').value);
+        var to = new Date(document.getElementById('dateTo').value);
+        document.getElementById('activePeriodLabel').textContent = 'Произвольный период: ' + formatDate(from) + ' — ' + formatDate(to);
+      } else {
+        panel.style.display = 'none';
+        document.getElementById('activePeriodLabel').textContent = periodLabels[res];
+      }
+    });
+  });
+  document.getElementById('applyRange').addEventListener('click', function(){
+    var from = new Date(document.getElementById('dateFrom').value);
+    var to = new Date(document.getElementById('dateTo').value);
+    var err = document.getElementById('rangeError');
+    if (from > to) { err.style.display = 'inline'; return; }
+    err.style.display = 'none';
+    document.getElementById('activePeriodLabel').textContent = 'Произвольный период: ' + formatDate(from) + ' — ' + formatDate(to);
+  });
+  document.querySelectorAll('.preset').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var days = parseInt(btn.dataset.days, 10);
+      var to = new Date(); var from = new Date();
+      from.setDate(from.getDate() - days);
+      document.getElementById('dateTo').value = to.toISOString().slice(0,10);
+      document.getElementById('dateFrom').value = from.toISOString().slice(0,10);
+      document.getElementById('rangeError').style.display = 'none';
+      document.getElementById('activePeriodLabel').textContent = 'Произвольный период: ' + formatDate(from) + ' — ' + formatDate(to);
+    });
+  });
+
+  var merchants = {
+    '24h': [
+      { name: 'ТОО «АкваМир»', total: 8, offline: 3, lastTx: '1 день', risk: 'Средний' },
+      { name: 'ИП Сериков А.', total: 2, offline: 1, lastTx: '2 дня', risk: 'Средний' },
+      { name: 'ТОО «ВендГрупп»', total: 12, offline: 2, lastTx: '1 день', risk: 'Низкий' },
+      { name: 'ИП Касымова Б.', total: 4, offline: 2, lastTx: '3 дня', risk: 'Средний' }
+    ],
+    '7d': [
+      { name: 'ТОО «КофеЛайн»', total: 6, offline: 4, lastTx: '9 дней', risk: 'Высокий' },
+      { name: 'ИП Дюсенов Т.', total: 3, offline: 2, lastTx: '12 дней', risk: 'Высокий' },
+      { name: 'ТОО «АвтоВош Сервис»', total: 8, offline: 3, lastTx: '8 дней', risk: 'Средний' }
+    ],
+    '30d': [
+      { name: 'ИП Нурланов Е.', total: 2, offline: 2, lastTx: '34 дня', risk: 'Критический' },
+      { name: 'ТОО «ВодаПлюс»', total: 5, offline: 4, lastTx: '41 день', risk: 'Критический' },
+      { name: 'ИП Жумабаева С.', total: 1, offline: 1, lastTx: '38 дней', risk: 'Критический' }
+    ]
+  };
+  var segTitles = {
+    '24h': 'Мерчанты к контакту — offline 24ч–7 дней',
+    '7d': 'Мерчанты к контакту — offline 7–30 дней',
+    '30d': 'Мерчанты к контакту — offline более 30 дней'
+  };
+  var riskColor = { 'Низкий': 'var(--text-secondary)', 'Средний': 'var(--warning-text)', 'Высокий': 'var(--warning-text)', 'Критический': 'var(--danger-text)' };
+  function renderMerchantList(seg){
+    document.getElementById('listTitle').textContent = segTitles[seg];
+    var rows = document.getElementById('merchantRows');
+    rows.innerHTML = '';
+    merchants[seg].forEach(function(m){
+      var pct = Math.round((m.offline / m.total) * 100);
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>'+m.name+'</td><td style="text-align:right;">'+m.total+'</td><td style="text-align:right;">'+m.offline+'</td><td style="text-align:right; font-weight:600;">'+pct+'%</td><td style="text-align:right;">'+m.lastTx+'</td><td style="text-align:right; font-weight:600; color:'+riskColor[m.risk]+';">'+m.risk+'</td>';
+      rows.appendChild(tr);
+    });
+  }
+  renderMerchantList('24h');
+  document.querySelectorAll('.seg-card').forEach(function(card){
+    card.addEventListener('click', function(){
+      document.querySelectorAll('.seg-card').forEach(function(c){ c.classList.remove('active'); });
+      card.classList.add('active');
+      renderMerchantList(card.dataset.seg);
+    });
+  });
+
+  var mapCities = [
+    { name: 'Алматы', country: 'Казахстан', lon: 76.95, lat: 43.24, devices: 3346, offline: 82 },
+    { name: 'Астана', country: 'Казахстан', lon: 71.43, lat: 51.18, devices: 2067, offline: 41 },
+    { name: 'Шымкент', country: 'Казахстан', lon: 69.59, lat: 42.34, devices: 1378, offline: 62 },
+    { name: 'Караганда', country: 'Казахстан', lon: 73.10, lat: 49.80, devices: 886, offline: 28 },
+    { name: 'Актобе', country: 'Казахстан', lon: 57.21, lat: 50.28, devices: 590, offline: 19 },
+    { name: 'Тараз', country: 'Казахстан', lon: 71.37, lat: 42.90, devices: 492, offline: 15 },
+    { name: 'Усть-Каменогорск', country: 'Казахстан', lon: 82.61, lat: 49.95, devices: 394, offline: 12 },
+    { name: 'Бишкек', country: 'Кыргызстан', lon: 74.59, lat: 42.87, devices: 210, offline: 5 },
+    { name: 'Ташкент', country: 'Узбекистан', lon: 69.24, lat: 41.30, devices: 340, offline: 9 }
+  ];
+  var mw = 900, mh = 560;
+  var svg = d3.select('#map').append('svg').attr('viewBox', '0 0 '+mw+' '+mh).attr('width', '100%').style('display','block');
+  var g = svg.append('g');
+  var projection = d3.geoNaturalEarth1().rotate([-72, 0]).scale(2400).translate([mw/2+350, mh/2+1100]);
+  var path = d3.geoPath(projection);
+  var maxDevices = d3.max(mapCities, function(d){ return d.devices; });
+  var rScale = d3.scaleSqrt().domain([0, maxDevices]).range([4, 26]);
+
+  d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(function(world){
+    var countries = topojson.feature(world, world.objects.countries).features;
+    g.selectAll('path').data(countries).join('path')
+      .attr('d', path).attr('fill', '#E1E0D9').attr('stroke', '#FFFFFF').attr('stroke-width', 0.5);
+
+    var points = g.selectAll('.city-point').data(mapCities).join('g')
+      .attr('class', 'city-point')
+      .attr('transform', function(d){ var p = projection([d.lon, d.lat]); return 'translate('+p[0]+','+p[1]+')'; })
+      .style('cursor', 'pointer');
+
+    points.append('circle')
+      .attr('r', function(d){ return rScale(d.devices); })
+      .attr('fill', function(d){ return d.offline/d.devices > 0.02 ? '#e34948' : '#2a78d6'; })
+      .attr('fill-opacity', 0.35)
+      .attr('stroke', function(d){ return d.offline/d.devices > 0.02 ? '#e34948' : '#2a78d6'; })
+      .attr('stroke-width', 1.5);
+    points.append('circle').attr('r', 3)
+      .attr('fill', function(d){ return d.offline/d.devices > 0.02 ? '#e34948' : '#2a78d6'; });
+
+    var tooltip = d3.select('#mapWrap').append('div').attr('class', 'tooltip-box');
+    points.on('mouseenter', function(event, d){
+      var rect = document.getElementById('mapWrap').getBoundingClientRect();
+      tooltip.html('<div style="font-weight:600; margin-bottom:4px;">'+d.name+', '+d.country+'</div><div style="color:var(--text-secondary);">Устройств: '+d.devices.toLocaleString('ru-RU')+'</div><div style="color:var(--text-secondary);">Offline: '+d.offline+'</div>')
+        .style('opacity', 1)
+        .style('left', (event.clientX - rect.left + 12) + 'px')
+        .style('top', (event.clientY - rect.top - 10) + 'px');
+    })
+    .on('mousemove', function(event){
+      var rect = document.getElementById('mapWrap').getBoundingClientRect();
+      tooltip.style('left', (event.clientX - rect.left + 12) + 'px').style('top', (event.clientY - rect.top - 10) + 'px');
+    })
+    .on('mouseleave', function(){ tooltip.style('opacity', 0); });
+
+    var zoom = d3.zoom().scaleExtent([1, 8]).on('zoom', function(event){ g.attr('transform', event.transform); });
+    svg.call(zoom);
+  });
+})();
+</script>
+</body>
+</html>
